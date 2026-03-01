@@ -153,19 +153,6 @@ vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold" }, {
   command = "checktime",
 })
 ```
-
----
-
-## Differences from claudecode.nvim
-
-| | claude-preview.nvim | claudecode.nvim |
-|---|---|---|
-| Claude location | External terminal | Neovim built-in terminal |
-| Protocol | Hooks + RPC | MCP / WebSocket |
-| Diff preview | Yes (before accept) | Yes |
-| Accept/reject from Neovim | No (use CLI) | Yes |
-| Python dependency | No | No |
-
 ---
 
 ## Troubleshooting
