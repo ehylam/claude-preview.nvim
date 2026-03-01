@@ -2,7 +2,7 @@
 
 A Neovim plugin that shows a **side-by-side diff before Claude Code applies any file change** — letting you review exactly what's changing before accepting.
 
-Designed for the workflow of running Claude Code CLI in an external terminal alongside Neovim, independently of `claudecode.nvim`.
+Designed for the workflow of running Claude Code CLI in an external terminal alongside Neovim.
 
 ---
 
