@@ -69,6 +69,60 @@ case "$TOOL_NAME" in
     nvim --headless -l "$SCRIPT_DIR/apply-multi-edit.lua" "$INPUT" "$PROP_FILE"
     ;;
 
+  Bash)
+    COMMAND="$(echo "$INPUT" | jq -r '.tool_input.command')"
+
+    # Detect rm commands: split on command separators and check each sub-command
+    detect_rm_paths() {
+      local cmd="$1"
+      # Trim leading whitespace
+      cmd="$(echo "$cmd" | sed 's/^[[:space:]]*//')"
+      # Match: optional sudo, then rm as standalone command, then flags/paths
+      if echo "$cmd" | grep -qE '^(sudo[[:space:]]+)?rm[[:space:]]'; then
+        # Strip rm command and known flags, leaving paths
+        echo "$cmd" | sed -E 's/^(sudo[[:space:]]+)?rm[[:space:]]+//' \
+                     | tr ' ' '\n' \
+                     | grep -vE '^-' \
+                     | while read -r p; do
+                         if [[ -z "$p" ]]; then continue; fi
+                         # Resolve relative paths against CWD
+                         if [[ "$p" != /* ]]; then
+                           echo "$CWD/$p"
+                         else
+                           echo "$p"
+                         fi
+                       done
+      fi
+    }
+
+    # Split command on && || ; and check each part
+    RM_PATHS=""
+    while IFS= read -r subcmd; do
+      while IFS= read -r path; do
+        [[ -n "$path" ]] && RM_PATHS="$RM_PATHS $path"
+      done < <(detect_rm_paths "$subcmd")
+    done < <(echo "$COMMAND" | sed 's/[;&|]\{1,2\}/\n/g')
+
+    RM_PATHS="$(echo "$RM_PATHS" | xargs)"
+    if [[ -z "$RM_PATHS" ]]; then
+      exit 0  # Not an rm command, pass through
+    fi
+
+    # Mark each path as deleted in neo-tree
+    if [[ "$HAS_NVIM" == "true" ]]; then
+      for path in $RM_PATHS; do
+        PATH_ESC="$(escape_lua "$path")"
+        nvim_send "require('claude-preview.changes').set('$PATH_ESC', 'deleted')"
+      done
+      nvim_send "pcall(function() require('claude-preview.neo_tree').refresh() end)"
+      # Reveal the first deleted file in the tree
+      FIRST_PATH="$(echo "$RM_PATHS" | awk '{print $1}')"
+      FIRST_ESC="$(escape_lua "$FIRST_PATH")"
+      nvim_send "vim.defer_fn(function() pcall(function() require('claude-preview.neo_tree').reveal('$FIRST_ESC') end) end, 300)"
+    fi
+    exit 0
+    ;;
+
   *)
     exit 0
     ;;
@@ -82,6 +136,36 @@ if [[ "$HAS_NVIM" == "true" ]]; then
   ORIG_ESC="$(escape_lua "$ORIG_FILE")"
   PROP_ESC="$(escape_lua "$PROP_FILE")"
   DISPLAY_ESC="$(escape_lua "$DISPLAY_NAME")"
+  FILE_PATH_ESC="$(escape_lua "$FILE_PATH")"
+
+  # Determine change status for neo-tree indicator
+  # Check if the actual file exists on disk (not the temp copy, which is always created)
+  if [[ -f "$FILE_PATH" ]]; then
+    CHANGE_STATUS="modified"
+  else
+    CHANGE_STATUS="created"
+  fi
+
+  nvim_send "require('claude-preview.changes').set('$FILE_PATH_ESC', '$CHANGE_STATUS')"
+  nvim_send "pcall(function() require('claude-preview.neo_tree').refresh() end)"
+  # Reveal the file in neo-tree: for modified files reveal the file itself,
+  # for created files reveal the nearest existing parent directory
+  if [[ "$CHANGE_STATUS" == "modified" ]]; then
+    nvim_send "vim.defer_fn(function() pcall(function() require('claude-preview.neo_tree').reveal('$FILE_PATH_ESC') end) end, 300)"
+  else
+    # Walk up to find the nearest existing parent directory
+    REVEAL_DIR="$(dirname "$FILE_PATH")"
+    while [[ ! -d "$REVEAL_DIR" && "$REVEAL_DIR" != "/" ]]; do
+      REVEAL_DIR="$(dirname "$REVEAL_DIR")"
+    done
+    # Reveal a file inside the parent dir to force neo-tree to expand it
+    REVEAL_TARGET="$(find "$REVEAL_DIR" -maxdepth 1 -type f | head -1)"
+    if [[ -z "$REVEAL_TARGET" ]]; then
+      REVEAL_TARGET="$REVEAL_DIR"
+    fi
+    REVEAL_TARGET_ESC="$(escape_lua "$REVEAL_TARGET")"
+    nvim_send "vim.defer_fn(function() pcall(function() require('claude-preview.neo_tree').reveal('$REVEAL_TARGET_ESC') end) end, 300)"
+  fi
   nvim_send "require('claude-preview.diff').show_diff('$ORIG_ESC', '$PROP_ESC', '$DISPLAY_ESC')"
 fi
 
