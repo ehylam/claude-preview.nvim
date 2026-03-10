@@ -13,8 +13,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Read the full hook JSON from stdin
 INPUT="$(cat)"
 
-# Extract all needed fields in a single jq call
-eval "$(echo "$INPUT" | jq -r '@sh "TOOL_NAME=\(.tool_name) CWD=\(.cwd) FILE_PATH=\(.tool_input.file_path // "") REPLACE_ALL=\(.tool_input.replace_all // false)"')"
+# Extract fields (separate calls to avoid eval injection)
+TOOL_NAME="$(echo "$INPUT" | jq -r '.tool_name')"
+CWD="$(echo "$INPUT" | jq -r '.cwd')"
 
 # Discover Neovim socket (prefer instance whose cwd matches project) and load RPC helpers
 source "$SCRIPT_DIR/nvim-socket.sh" "$CWD" 2>/dev/null || true
