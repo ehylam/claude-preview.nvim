@@ -48,12 +48,12 @@ find_nvim_socket() {
 
   # 2. Scan macOS /var/folders paths
   local _glob_out
-  _glob_out="$(compgen -G '/var/folders/*/*/T/nvim.*/*/nvim.*.0' 2>/dev/null)" || true
+  _glob_out="$(compgen -G '/var/folders/*/*/T/nvim.*/*/*.*.0' 2>/dev/null)" || true
   if [[ -n "$_glob_out" ]]; then
     while IFS= read -r socket; do
       if [[ -S "$socket" ]]; then
-        pid=$(basename "$socket" | sed 's/^nvim\.\([0-9]*\)\.0$/\1/')
-        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+        pid=$(basename "$socket" | sed 's/^[a-zA-Z_-]*\.\([0-9]*\)\.0$/\1/')
+        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && ps -p "$pid" -o command= 2>/dev/null | grep -q '[n]vim'; then
           live_sockets+=("$pid:$socket")
         fi
       fi
@@ -67,7 +67,7 @@ find_nvim_socket() {
     while IFS= read -r socket; do
       if [[ -S "$socket" ]]; then
         pid=$(echo "$socket" | grep -oE 'nvim\.[0-9]+' | grep -oE '[0-9]+')
-        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && ps -p "$pid" -o command= 2>/dev/null | grep -q '[n]vim'; then
           live_sockets+=("$pid:$socket")
         fi
       fi

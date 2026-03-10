@@ -1,4 +1,4 @@
-#!/usr/bin/env -S nvim --headless -l
+#!/usr/bin/env lua
 -- apply-edit.lua — Apply a single Edit (old_string → new_string) to a file.
 --
 -- Usage (via nvim --headless -l):
@@ -11,6 +11,16 @@ local old_string  = arg[2]
 local new_string  = arg[3]
 local replace_all = arg[4] == "true"
 local output_path = arg[5]
+
+-- When --from-files flag is passed, read old/new strings from file paths
+if arg[6] == "--from-files" then
+  local f1 = assert(io.open(old_string, "r"))
+  old_string = f1:read("*a")
+  f1:close()
+  local f2 = assert(io.open(new_string, "r"))
+  new_string = f2:read("*a")
+  f2:close()
+end
 
 -- Read the file (empty string if it does not exist yet)
 local content = ""
